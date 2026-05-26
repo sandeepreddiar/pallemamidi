@@ -6,7 +6,7 @@ import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   title: "Shipping Policy",
-  description: "Delivery areas, transit times and packaging details for Palla Mamidi mango orders across India.",
+  description: "Delivery areas, transit times and packaging details for Palle Mamidi mango orders across India.",
   alternates: { canonical: "/shipping-policy" },
 };
 

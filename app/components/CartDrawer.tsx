@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import OptimizedImage from "./OptimizedImage";
 import { X, Trash2, ShoppingBag, ArrowRight, Minus, Plus, Check } from "lucide-react";
 import { useCartStore } from "@/app/store/useCartStore";
 import { useEffect, useState } from "react";
@@ -14,6 +14,20 @@ export default function CartDrawer() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (isCartOpen) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [isCartOpen]);
 
   if (!isMounted || !_hasHydrated) return null;
 
@@ -79,11 +93,13 @@ export default function CartDrawer() {
                   className="flex items-start space-x-4 bg-white p-4 rounded-2xl shadow-sm border border-[#1B330F]/5 group"
                 >
                   <div className="relative w-20 h-20 bg-brand-primary-green/5 rounded-xl overflow-hidden flex-shrink-0">
-                    <Image
+                    <OptimizedImage
                       src={item.image}
                       alt={item.name}
-                      fill
-                      className="object-contain p-2 group-hover:scale-110 transition-transform duration-500"
+                      width={100}
+                      quality={80}
+                      className="absolute inset-0 w-full h-full"
+                      imgClassName="object-contain p-2 group-hover:scale-110 transition-transform duration-500"
                     />
                   </div>
                   <div className="flex-1 min-w-0">

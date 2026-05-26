@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Track Your Order",
-  description: "Track your Palla Mamidi mango order using the phone number from checkout.",
+  description: "Track your Palle Mamidi mango order using the phone number from checkout.",
   robots: { index: false, follow: false },
   alternates: { canonical: "/track" },
 };

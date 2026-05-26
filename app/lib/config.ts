@@ -5,9 +5,9 @@ export const SITE_CONFIG = {
   contact: {
     email: "pallemamidi@gmail.com",
     backupEmail: "pallemamidi@gmail.com",
-    phone: "+91 98481 60920", // Centralized business/orchard contact
-    phoneLink: "tel:+919848160920",
-    address: "Palle Mamidi Orchards, Chittoor, Andhra Pradesh, India",
+    phone: "+91 86397 50678", // Centralized business/orchard contact
+    phoneLink: "tel:+918639750678",
+    address: "SMR farms, Baddipudi village, Ulavapadu mandal, Prakasam dist, Andhra pradesh",
     timings: "Mon–Sat, 9:00 AM – 6:00 PM",
   },
   payment: {

@@ -6,14 +6,15 @@ import TopBar from "../components/TopBar";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { SITE_CONFIG } from "../lib/config";
+import OptimizedImage from "../components/OptimizedImage";
 
 export const metadata: Metadata = {
   title: "About Us",
-  description: "Learn about Palle Mamidi Farms, our traditional village mango orchards in Chittoor, Andhra Pradesh, and our commitment to naturally ripened, chemical-free mangoes.",
+  description: "Learn about SMR farms, our traditional village mango farms in Ulavapadu, Andhra Pradesh, and our commitment to naturally ripened, chemical-free mangoes.",
   alternates: { canonical: "/about" },
   openGraph: {
-    title: "About Palle Mamidi Farms",
-    description: "Discover our journey of growing and delivering naturally ripened village mangoes chemical-free.",
+    title: "About SMR farms",
+    description: "Discover our journey of growing and delivering naturally ripened village mangoes chemical-free from SMR farms.",
   },
 };
 
@@ -48,7 +49,7 @@ export default function AboutPage() {
                 Nurtured by Nature, Perfected by Tradition
               </h2>
               <p className="text-[#3F4E34]/90 leading-relaxed">
-                At Palle Mamidi (meaning "Village Mango" in Telugu), we believe the finest things in life cannot be rushed. Our generational orchards nestled in the scenic valleys of Chittoor, Andhra Pradesh, are dedicated to preserving the authentic, rich flavor of traditional mango varieties.
+                At Palle Mamidi (meaning "Village Mango" in Telugu), we believe the finest things in life cannot be rushed. Our generational farms, rooted in the fertile lands of Ulavapadu, Andhra Pradesh, are dedicated to preserving the authentic rich flavour of traditional mango varieties.
               </p>
               <p className="text-[#3F4E34]/90 leading-relaxed">
                 Every mango we harvest represents a legacy of sustainable agriculture, family dedication, and respect for nature. We care for our trees using traditional methods, ensuring the soil remains fertile and the crop is healthy without relies on harsh chemicals or growth-promoters.
@@ -56,10 +57,13 @@ export default function AboutPage() {
             </div>
             <div className="flex-1 w-full max-w-md">
               <div className="aspect-[4/3] rounded-3xl overflow-hidden border border-[#1B330F]/10 shadow-lg relative bg-white/40 p-4">
-                <img
+                <OptimizedImage
                   src="/mangoes/mango-6.png"
                   alt="Naturally Ripening Mangoes"
-                  className="w-full h-full object-contain hover:scale-105 transition-all duration-500"
+                  width={600}
+                  quality={80}
+                  className="w-full h-full"
+                  imgClassName="object-contain hover:scale-105 transition-all duration-500"
                 />
               </div>
             </div>

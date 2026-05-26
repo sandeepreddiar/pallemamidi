@@ -6,7 +6,7 @@ import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   title: "Terms & Conditions",
-  description: "Order terms, product availability and customer responsibilities for Palla Mamidi mango purchases.",
+  description: "Order terms, product availability and customer responsibilities for Palle Mamidi mango purchases.",
   alternates: { canonical: "/terms-and-conditions" },
 };
 

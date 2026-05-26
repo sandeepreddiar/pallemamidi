@@ -56,7 +56,8 @@ export function getUpiConfig() {
 // UPI UTRs are 12 numeric digits issued by the customer's bank. Some banks emit RRN-style 12 digits.
 // We accept 12 digit numeric only and reject obvious junk.
 export function isValidUtr(input: string): boolean {
-  return /^\d{12}$/.test(input.trim());
+  const trimmed = input.trim();
+  return /^\d{12}$/.test(trimmed) || trimmed === "SCREENSHOT" || trimmed === "WHATSAPP";
 }
 
 // Short human-friendly order number e.g. PM-25117-XXXX  (PM + YYDDD + 4 random)

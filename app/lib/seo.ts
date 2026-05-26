@@ -7,10 +7,10 @@ export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ?? 'https://pallemamidi.vercel.app'
 ).replace(/\/$/, '');
 
-export const SITE_NAME = 'Palla Mamidi';
-export const SITE_TAGLINE = 'The taste of royalty… Naturally';
+export const SITE_NAME = 'Palle Mamidi';
+export const SITE_TAGLINE = 'Farm-Fresh Andhra Mangoes';
 export const BRAND_DESCRIPTION =
-  'Palla Mamidi delivers farm-fresh, naturally ripened Andhra mangoes — Banganapalle, Cheruku Rasalu, Sindhura, Natu Rasalu, Imam Pasand, Neelum, and more — sourced directly from our village orchards and shipped across India in season.';
+  'Palle Mamidi delivers farm-fresh, naturally ripened Andhra mangoes — Banganapalle, Cheruku Rasalu, Sindhura, Natu Rasalu, Imam Pasand, Neelum, and more — sourced directly from our village orchards and shipped across India in season.';
 
 export const DEFAULT_OG_IMAGE = '/mangoes/mango-1.png';
 

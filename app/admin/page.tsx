@@ -29,6 +29,8 @@ export default async function AdminPage() {
     rtcLandmark: o.rtcLandmark,
     customerNotes: o.customerNotes,
     totalAmount: o.totalAmount,
+    shippingFee: o.shippingFee,
+    packingFee: o.packingFee,
     status: o.status,
     paymentMethod: o.paymentMethod,
     utr: o.utr,

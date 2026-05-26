@@ -6,7 +6,7 @@ import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   title: "Refund Policy",
-  description: "Refund rules for fresh, perishable mango deliveries from Palla Mamidi.",
+  description: "Refund rules for fresh, perishable mango deliveries from Palle Mamidi.",
   alternates: { canonical: "/refund-policy" },
 };
 

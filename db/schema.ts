@@ -50,6 +50,8 @@ export const orders = pgTable('orders', {
   customerNotes: text('customer_notes'),
 
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
+  shippingFee: numeric('shipping_fee', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  packingFee: numeric('packing_fee', { precision: 10, scale: 2 }).notNull().default('0.00'),
   status: orderStatusEnum('status').default('PENDING').notNull(),
 
   paymentMethod: paymentMethodEnum('payment_method').default('UPI').notNull(),

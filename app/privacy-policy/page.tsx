@@ -7,7 +7,7 @@ import { SITE_CONFIG } from "../lib/config";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How Palla Mamidi collects, uses and protects customer information.",
+  description: "How Palle Mamidi collects, uses and protects customer information.",
   alternates: { canonical: "/privacy-policy" },
 };
 

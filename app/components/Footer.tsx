@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Globe, Send, Share2 } from "lucide-react";
 import { SITE_CONFIG } from "@/app/lib/config";
 
 export default function Footer() {
@@ -14,11 +13,51 @@ export default function Footer() {
               {SITE_CONFIG.tagline}
             </p>
             <div className="flex items-center space-x-4">
-              {[Globe, Send, Share2].map((Icon, i) => (
-                <a key={i} href="#" className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center hover:bg-brand-cream hover:text-[#1B330F] transition-all">
-                  <Icon className="w-5 h-5" />
-                </a>
-              ))}
+              <a
+                href="https://www.instagram.com/pallemamidi/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center hover:bg-brand-cream hover:text-[#1B330F] transition-all"
+                aria-label="Instagram"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-5 h-5"
+                >
+                  <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                  <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+                </svg>
+              </a>
+              <a
+                href={`mailto:${SITE_CONFIG.contact.email}`}
+                className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center hover:bg-brand-cream hover:text-[#1B330F] transition-all"
+                aria-label="Gmail"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-5 h-5"
+                >
+                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                </svg>
+              </a>
             </div>
           </div>
 

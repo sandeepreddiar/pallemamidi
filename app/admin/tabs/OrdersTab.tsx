@@ -331,11 +331,25 @@ function OrderRow({
                   </div>
                 ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-brand-primary-green/10 flex justify-between items-center">
-                <span className="text-xs font-bold uppercase text-brand-primary-green/60">Total</span>
-                <span className="text-xl font-[family-name:var(--font-playfair)] font-bold text-brand-primary-green tabular-nums">
-                  ₹{Number(order.totalAmount).toLocaleString("en-IN")}
-                </span>
+              <div className="mt-3 pt-3 border-t border-brand-primary-green/10 space-y-1.5 text-xs text-brand-primary-green/75">
+                <div className="flex justify-between items-center">
+                  <span>Subtotal</span>
+                  <span className="font-semibold tabular-nums">₹{(Number(order.totalAmount) - Number(order.shippingFee) - Number(order.packingFee)).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Packing Fee</span>
+                  <span className="font-semibold tabular-nums">₹{Number(order.packingFee).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>RTC Cargo Shipping</span>
+                  <span className="font-semibold tabular-nums">₹{Number(order.shippingFee).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="pt-2 border-t border-brand-primary-green/10 flex justify-between items-center text-brand-primary-green">
+                  <span className="text-xs font-bold uppercase">Total</span>
+                  <span className="text-xl font-[family-name:var(--font-playfair)] font-bold tabular-nums">
+                    ₹{Number(order.totalAmount).toLocaleString("en-IN")}
+                  </span>
+                </div>
               </div>
             </div>
 

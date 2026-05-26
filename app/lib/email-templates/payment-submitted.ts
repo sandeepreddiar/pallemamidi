@@ -13,6 +13,8 @@ interface PaymentSubmittedTemplateInput {
   submittedAt: string;
   cartSummary: { variety: string; weightKg: number; quantity: number; price?: number }[];
   totalAmount: number;
+  shippingFee?: number;
+  packingFee?: number;
   scoreBadge: string;
   score: number;
   timestamp: string;
@@ -74,8 +76,26 @@ export function renderPaymentSubmittedTemplate(data: PaymentSubmittedTemplateInp
             ${data.utr}
           </span>
         </div>
+        ${data.packingFee !== undefined || data.shippingFee !== undefined ? `
+          <div class="card-row" style="font-size: 12px; color: #666666;">
+            <span class="card-label">Items Subtotal:</span>
+            <span>₹${(data.totalAmount - (data.shippingFee || 0) - (data.packingFee || 0)).toLocaleString("en-IN")}</span>
+          </div>
+          ${data.packingFee ? `
+            <div class="card-row" style="font-size: 12px; color: #666666;">
+              <span class="card-label">Packing Fee:</span>
+              <span>₹${data.packingFee.toLocaleString("en-IN")}</span>
+            </div>
+          ` : ""}
+          ${data.shippingFee ? `
+            <div class="card-row" style="font-size: 12px; color: #666666;">
+              <span class="card-label">RTC Cargo Shipping:</span>
+              <span>₹${data.shippingFee.toLocaleString("en-IN")}</span>
+            </div>
+          ` : ""}
+        ` : ""}
         <div class="card-row">
-          <span class="card-label">💰 Amount:</span>
+          <span class="card-label">💰 Amount Paid:</span>
           <strong style="font-size: 18px; color: #1B330F;">₹${data.totalAmount.toLocaleString("en-IN")}</strong>
         </div>
         <div class="card-row">
@@ -127,6 +147,24 @@ export function renderPaymentSubmittedTemplate(data: PaymentSubmittedTemplateInp
         </thead>
         <tbody>
           ${tableRows}
+          ${data.packingFee !== undefined || data.shippingFee !== undefined ? `
+            <tr>
+              <td colspan="2" class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 10px;">Items Subtotal:</td>
+              <td class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 10px;">₹${(data.totalAmount - (data.shippingFee || 0) - (data.packingFee || 0)).toLocaleString("en-IN")}</td>
+            </tr>
+            ${data.packingFee ? `
+              <tr>
+                <td colspan="2" class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">Packing Fee:</td>
+                <td class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">₹${data.packingFee.toLocaleString("en-IN")}</td>
+              </tr>
+            ` : ""}
+            ${data.shippingFee ? `
+              <tr>
+                <td colspan="2" class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">RTC Cargo Shipping:</td>
+                <td class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">₹${data.shippingFee.toLocaleString("en-IN")}</td>
+              </tr>
+            ` : ""}
+          ` : ""}
           <tr>
             <td colspan="2" class="table-cell" style="font-weight: 800; font-size: 15px; border-bottom: none; text-align: right; padding-top: 15px;">TOTAL AMOUNT PAID:</td>
             <td class="table-cell" style="font-weight: 800; font-size: 18px; color: #2E7D32; border-bottom: none; text-align: right; padding-top: 15px;">₹${data.totalAmount.toLocaleString("en-IN")}</td>

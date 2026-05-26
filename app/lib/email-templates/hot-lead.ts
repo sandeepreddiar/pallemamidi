@@ -9,6 +9,8 @@ interface HotLeadTemplateInput {
   customerNotes?: string | null;
   cartSummary: { variety: string; weightKg: number; quantity: number; price?: number }[];
   totalAmount: number;
+  shippingFee?: number;
+  packingFee?: number;
   scoreBadge: string;
   score: number;
   timestamp: string;
@@ -94,6 +96,24 @@ export function renderHotLeadTemplate(data: HotLeadTemplateInput): string {
         </thead>
         <tbody>
           ${tableRows}
+          ${data.packingFee !== undefined || data.shippingFee !== undefined ? `
+            <tr>
+              <td colspan="2" class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 10px;">Items Subtotal:</td>
+              <td class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 10px;">₹${(data.totalAmount - (data.shippingFee || 0) - (data.packingFee || 0)).toLocaleString("en-IN")}</td>
+            </tr>
+            ${data.packingFee ? `
+              <tr>
+                <td colspan="2" class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">Packing Fee:</td>
+                <td class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">₹${data.packingFee.toLocaleString("en-IN")}</td>
+              </tr>
+            ` : ""}
+            ${data.shippingFee ? `
+              <tr>
+                <td colspan="2" class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">RTC Cargo Shipping:</td>
+                <td class="table-cell" style="font-size: 13px; color: #666666; border-bottom: none; text-align: right; padding-top: 4px;">₹${data.shippingFee.toLocaleString("en-IN")}</td>
+              </tr>
+            ` : ""}
+          ` : ""}
           <tr>
             <td colspan="2" class="table-cell" style="font-weight: 800; font-size: 15px; border-bottom: none; text-align: right; padding-top: 15px;">TOTAL AMOUNT:</td>
             <td class="table-cell" style="font-weight: 800; font-size: 18px; color: #DE8A24; border-bottom: none; text-align: right; padding-top: 15px;">₹${data.totalAmount.toLocaleString("en-IN")}</td>

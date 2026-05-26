@@ -8,9 +8,9 @@ import { SITE_CONFIG } from "../lib/config";
 
 export const metadata: Metadata = {
   title: "Contact Us",
-  description: "Reach the Palla Mamidi farm team for order support, bulk enquiries and shipping questions. Email, phone, address and support hours.",
+  description: "Reach the Palle Mamidi farm team for order support, bulk enquiries and shipping questions. Email, phone, address and support hours.",
   alternates: { canonical: "/contact" },
-  openGraph: { title: "Contact Palla Mamidi", description: "Get in touch with the Palla Mamidi mango farm team." },
+  openGraph: { title: "Contact Palle Mamidi", description: "Get in touch with the Palle Mamidi mango farm team." },
 };
 
 export default function ContactPage() {
@@ -30,7 +30,6 @@ export default function ContactPage() {
             <h2 className="text-xl font-bold mb-2">Email Support</h2>
             <p className="opacity-80 mb-2">For general inquiries and order support:</p>
             <a href={`mailto:${SITE_CONFIG.contact.email}`} className="font-bold text-brand-primary-green hover:text-brand-orange transition-colors">{SITE_CONFIG.contact.email}</a>
-            <p className="opacity-60 text-sm mt-1">or {SITE_CONFIG.contact.backupEmail}</p>
           </div>
 
           <div className="bg-white border border-[#1B330F]/10 p-8 rounded-3xl shadow-sm hover:shadow-lg transition-shadow">

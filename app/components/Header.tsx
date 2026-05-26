@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
+import OptimizedImage from "./OptimizedImage";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
@@ -32,22 +32,23 @@ export default function Header() {
       {/* Minimum Order Announcement Banner */}
       <div className="bg-brand-orange text-brand-cream text-center text-[10px] md:text-xs py-2.5 px-4 font-bold tracking-wide shadow-sm flex items-center justify-center gap-2 animate-in fade-in slide-in-from-top duration-500 relative z-50 border-b border-brand-cream/10">
         <span className="inline-block bg-white/20 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-extrabold">Notice</span>
-        <span>Minimum order of <span className="underline decoration-2 decoration-white">10 kg</span> (mix & match varieties) is required for direct farm cargo dispatch.</span>
+        <span>Orders are accepted for <span className="underline decoration-2 decoration-white">10 kg</span> and above only.</span>
       </div>
 
       <header className="px-6 lg:px-12 py-2 flex items-center justify-between relative bg-brand-cream/80 backdrop-blur-md border-b border-[#1B330F]/5">
         {/* Logo & Brand */}
         <div className="flex items-center space-x-0">
-          <Link href="/" className="flex items-center group">
-            <Image
+          <Link href="/" className="flex items-center gap-2 group">
+            <OptimizedImage
               src="/logo.png"
-              alt="Palla Mamidi Logo"
-              width={50}
-              height={50}
-              className="object-contain drop-shadow-sm w-auto h-auto group-hover:scale-105 transition-transform"
-              priority
+              alt="Palle Mamidi Logo"
+              width={100}
+              quality={85}
+              className="w-[50px] h-[50px]"
+              imgClassName="object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
+              transparent={true}
             />
-            <div className="flex flex-col -ml-2">
+            <div className="flex flex-col">
               <h1 className="font-[family-name:var(--font-telugu)] text-2xl lg:text-3xl font-bold text-[#2E4D25] leading-tight tracking-tight">
                 పల్లె మామిడి
               </h1>

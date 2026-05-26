@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   description: BRAND_DESCRIPTION,
   applicationName: SITE_NAME,
   keywords: [
-    "Palla Mamidi",
+    "Palle Mamidi",
     "Andhra mangoes online",
     "buy Banganapalle mango",
     "Cheruku Rasalu online",
@@ -100,8 +100,16 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon-16x16.png?v=2", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png?v=2", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico?v=2" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png?v=2", sizes: "180x180", type: "image/png" },
+    ],
   },
+  manifest: "/site.webmanifest",
   formatDetection: {
     telephone: true,
     email: true,
@@ -114,7 +122,7 @@ const organizationJsonLd = {
   "@type": "LocalBusiness",
   "@id": `${SITE_URL}/#organization`,
   name: SITE_NAME,
-  alternateName: "Palla Mamidi Farms",
+  alternateName: "Palle Mamidi Farms",
   url: SITE_URL,
   logo: `${SITE_URL}${DEFAULT_OG_IMAGE}`,
   image: `${SITE_URL}${DEFAULT_OG_IMAGE}`,

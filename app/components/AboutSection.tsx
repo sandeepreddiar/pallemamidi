@@ -1,3 +1,5 @@
+import OptimizedImage from "./OptimizedImage";
+
 export default function AboutSection() {
   return (
     <section id="about" className="py-24 px-6 lg:px-12 bg-white overflow-hidden">
@@ -26,10 +28,13 @@ export default function AboutSection() {
         </div>
         <div className="flex-1 relative">
           <div className="aspect-square rounded-3xl bg-brand-primary-green/5 overflow-hidden border border-[#1B330F]/5 p-8">
-            <img 
+            <OptimizedImage 
               src="/mangoes/mango-6.png" 
               alt="Natural Mangoes" 
-              className="w-full h-full object-contain hover:scale-105 transition-transform duration-700"
+              width={600}
+              quality={80}
+              className="w-full h-full"
+              imgClassName="object-contain hover:scale-105 transition-transform duration-700"
             />
           </div>
           <div className="absolute -bottom-8 -left-8 bg-[#1B330F] text-brand-cream p-8 rounded-2xl shadow-2xl max-w-xs">

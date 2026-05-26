@@ -149,21 +149,54 @@ export default function TrackForm() {
                 )}
 
                 <details className="mt-5 text-sm">
-                  <summary className="cursor-pointer text-brand-primary-green/70 font-semibold">Items & shipping</summary>
+                  <summary className="cursor-pointer text-brand-primary-green/70 font-semibold hover:text-brand-primary-green transition-colors">Items, shipping & price breakdown</summary>
                   <div className="mt-3 grid sm:grid-cols-2 gap-4">
-                    <div className="bg-brand-cream/40 rounded-xl p-3 space-y-1">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="flex justify-between text-xs text-brand-primary-green/80">
-                          <span>{item.variety} · {item.quantityKg}kg</span>
-                          <span className="font-semibold">@ ₹{item.priceAtPurchase}/kg</span>
+                    <div className="bg-brand-cream/40 rounded-xl p-4 space-y-3 text-xs text-brand-primary-green/80">
+                      <div className="space-y-1 border-b border-brand-primary-green/5 pb-2">
+                        <p className="font-bold text-[10px] uppercase tracking-wider text-brand-primary-green/50">Items</p>
+                        {order.items.map((item) => (
+                          <div key={item.id} className="flex justify-between">
+                            <span>{item.variety} · {item.quantityKg}kg</span>
+                            <span className="font-semibold">@ ₹{item.priceAtPurchase}/kg</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between">
+                          <span>Subtotal</span>
+                          <span className="font-medium">₹{(Number(order.totalAmount) - Number(order.shippingFee || 0) - Number(order.packingFee || 0)).toLocaleString("en-IN")}</span>
                         </div>
-                      ))}
+                        <div className="flex justify-between">
+                          <span>Packing Fee</span>
+                          <span className="font-medium">₹{Number(order.packingFee || 0).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>RTC Cargo Shipping</span>
+                          <span className="font-medium">₹{Number(order.shippingFee || 0).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-brand-primary-green/10 pt-2 font-bold text-brand-primary-green text-sm">
+                          <span>Total</span>
+                          <span>₹{Number(order.totalAmount).toLocaleString("en-IN")}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-brand-cream/40 rounded-xl p-3 text-xs space-y-1 text-brand-primary-green/80">
+                    <div className="bg-brand-cream/40 rounded-xl p-4 text-xs space-y-2 text-brand-primary-green/80">
+                      <p className="font-bold text-[10px] uppercase tracking-wider text-brand-primary-green/50">Delivery details</p>
                       <p><b>City:</b> {order.city}, {order.state} - {order.pincode}</p>
                       {order.rtcDepotName && <p><b>RTC Depot:</b> {order.rtcDepotName}</p>}
                       <p><b>Landmark:</b> {order.rtcLandmark}</p>
-                      {order.utr && <p><b>UTR:</b> <span className="font-mono">{order.utr}</span></p>}
+                      {order.utr && (
+                        <p>
+                          <b>Payment Verification:</b>{" "}
+                          {order.utr === "SCREENSHOT" || order.utr === "WHATSAPP" ? (
+                            <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/50">
+                              Shared on WhatsApp
+                            </span>
+                          ) : (
+                            <span className="font-mono">{order.utr}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </details>

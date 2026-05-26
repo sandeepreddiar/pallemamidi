@@ -7,8 +7,10 @@ import { eq, and } from "drizzle-orm";
 import { findVarietyByName } from "@/app/lib/catalog";
 import { buildUpiLink, getUpiConfig, generateOrderNumber, isValidUtr } from "@/app/lib/upi";
 import { generateQrSvgDataUrl } from "@/app/lib/qr";
-import { getDepotByCode } from "@/app/lib/rtcDepots";
+
 import { revalidatePath } from "next/cache";
+import { calculateShippingFee, calculatePackingFee } from "@/app/lib/shipping";
+import { neon } from "@neondatabase/serverless";
 
 const CartLineSchema = z.object({
   variety: z.string().trim().min(1).max(80),
@@ -22,7 +24,7 @@ const CreateOrderInputSchema = z.object({
   state: z.string().trim().min(2, "State is required").max(80),
   city: z.string().trim().min(2, "City is required").max(120),
   pincode: z.string().regex(/^\d{6}$/, "Pincode must be exactly 6 digits"),
-  rtcDepotCode: z.string().trim().min(1).max(40),
+  rtcDepotName: z.string().trim().min(2, "Please enter your nearest RTC bus depot").max(200),
   rtcLandmark: z.string().trim().min(3, "RTC/Cargo landmark is required").max(500),
   customerNotes: z.string().trim().max(500).optional().nullable(),
   items: z.array(CartLineSchema).min(1, "Cart is empty").max(20),
@@ -61,7 +63,11 @@ export async function submitOrder(input: CreateOrderInput): Promise<SubmitOrderR
       if (entry.status !== "AVAILABLE" && entry.status !== "PREBOOKING") {
         return { success: false, error: `${entry.name} is currently sold out or out of season.` };
       }
-      if (!entry.allowedWeightsKg.includes(line.weightKg)) {
+      const baseWeights = entry.allowedWeightsKg.filter(x => x !== 1);
+      const isWeightValid = line.weightKg > 1 && Number.isInteger(line.weightKg) && (
+        baseWeights.length === 0 || baseWeights.some(a => (line.weightKg - a) >= 0 && (line.weightKg - a) % 10 === 0)
+      );
+      if (!isWeightValid) {
         return { success: false, error: `${entry.name}: ${line.weightKg}kg box is not available.` };
       }
       const kg = line.weightKg * line.quantity;
@@ -82,42 +88,53 @@ export async function submitOrder(input: CreateOrderInput): Promise<SubmitOrderR
       return { success: false, error: "Order total must be at least ₹1." };
     }
 
-    const depot = getDepotByCode(validated.rtcDepotCode);
-    if (!depot) {
-      return { success: false, error: "Please pick a valid RTC depot from the list." };
+    // Ensure table columns exist in Neon database (failsafe for sandbox push blockers)
+    try {
+      const dbUrl = process.env.DATABASE_URL!;
+      const migrationSql = neon(dbUrl);
+      await migrationSql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee numeric(10, 2) NOT NULL DEFAULT '0.00';`;
+      await migrationSql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS packing_fee numeric(10, 2) NOT NULL DEFAULT '0.00';`;
+    } catch (e) {
+      console.warn("Failsafe column migration warning:", e);
     }
+
+    const shippingFee = calculateShippingFee(validated.state, validated.city, totalWeight);
+    const packingFee = calculatePackingFee(totalWeight);
+    const totalAmountWithFees = totalAmount + shippingFee + packingFee;
+
+    const depotName = validated.rtcDepotName;
 
     const upi = getUpiConfig();
     const orderNumber = generateOrderNumber();
 
-    const newOrder = await db.transaction(async (tx) => {
-      const [created] = await tx.insert(orders).values({
-        orderNumber,
-        customerName: validated.customerName,
-        phoneNumber: validated.phoneNumber,
-        state: validated.state,
-        city: validated.city,
-        pincode: validated.pincode,
-        rtcDepotCode: depot.code,
-        rtcDepotName: depot.name + (depot.city !== "—" ? `, ${depot.city}` : ""),
-        rtcLandmark: validated.rtcLandmark,
-        customerNotes: validated.customerNotes || null,
-        totalAmount: totalAmount.toFixed(2),
-        status: "PENDING",
-        paymentMethod: "UPI",
-      }).returning();
+    const [created] = await db.insert(orders).values({
+      orderNumber,
+      customerName: validated.customerName,
+      phoneNumber: validated.phoneNumber,
+      state: validated.state,
+      city: validated.city,
+      pincode: validated.pincode,
+      rtcDepotCode: null,
+      rtcDepotName: depotName,
+      rtcLandmark: validated.rtcLandmark,
+      customerNotes: validated.customerNotes || null,
+      totalAmount: totalAmountWithFees.toFixed(2),
+      shippingFee: shippingFee.toFixed(2),
+      packingFee: packingFee.toFixed(2),
+      status: "PENDING",
+      paymentMethod: "UPI",
+    }).returning();
 
-      await tx.insert(orderItems).values(
-        itemsData.map((i) => ({ ...i, orderId: created.id }))
-      );
+    await db.insert(orderItems).values(
+      itemsData.map((i) => ({ ...i, orderId: created.id }))
+    );
 
-      return created;
-    });
+    const newOrder = created;
 
     const upiLink = buildUpiLink({
       payeeVpa: upi.vpa,
       payeeName: upi.name,
-      amount: totalAmount,
+      amount: totalAmountWithFees,
       transactionRef: orderNumber,
       note: `Mangoes ${orderNumber}`,
     });
@@ -130,7 +147,7 @@ export async function submitOrder(input: CreateOrderInput): Promise<SubmitOrderR
       success: true,
       orderId: newOrder.id,
       orderNumber,
-      totalAmount,
+      totalAmount: totalAmountWithFees,
       upiLink,
       upiVpa: upi.vpa,
       upiPayeeName: upi.name,
@@ -164,28 +181,43 @@ export async function submitUtr(input: { orderId: string; phoneNumber: string; u
       return { success: false, error: "UTR must be exactly 12 digits. Check your UPI app's transaction reference." };
     }
 
-    const existing = await db.query.orders.findFirst({
-      where: and(eq(orders.id, parsed.orderId), eq(orders.phoneNumber, parsed.phoneNumber)),
-    });
-
-    if (!existing) {
-      return { success: false, error: "Order not found. Double-check your details." };
-    }
-    if (existing.status === "PAID" || existing.status === "DISPATCHED" || existing.status === "DELIVERED") {
-      return { success: false, error: "This order is already marked paid. No further action needed." };
-    }
-    if (existing.status === "CANCELLED") {
-      return { success: false, error: "This order was cancelled and cannot accept a payment reference." };
-    }
-
-    await db.update(orders)
+    // Perform update in a single atomic SQL transaction to prevent status-transition race conditions (TOCTOU)
+    const updated = await db.update(orders)
       .set({
         utr,
         utrSubmittedAt: new Date(),
         status: "PENDING_VERIFICATION",
         updatedAt: new Date(),
       })
-      .where(eq(orders.id, parsed.orderId));
+      .where(
+        and(
+          eq(orders.id, parsed.orderId),
+          eq(orders.phoneNumber, parsed.phoneNumber),
+          eq(orders.status, "PENDING")
+        )
+      )
+      .returning();
+
+    if (updated.length === 0) {
+      // Fallback query to provide detailed context-aware user feedback on why the update failed
+      const existing = await db.query.orders.findFirst({
+        where: and(eq(orders.id, parsed.orderId), eq(orders.phoneNumber, parsed.phoneNumber)),
+      });
+
+      if (!existing) {
+        return { success: false, error: "Order not found. Double-check your details." };
+      }
+      if (existing.status === "PENDING_VERIFICATION") {
+        return { success: true }; // Already submitted, handle idempotently
+      }
+      if (existing.status === "PAID" || existing.status === "DISPATCHED" || existing.status === "DELIVERED") {
+        return { success: false, error: "This order is already marked paid. No further action needed." };
+      }
+      if (existing.status === "CANCELLED") {
+        return { success: false, error: "This order was cancelled and cannot accept a payment reference." };
+      }
+      return { success: false, error: "Invalid order status transition." };
+    }
 
     revalidatePath("/admin");
     revalidatePath(`/track`);

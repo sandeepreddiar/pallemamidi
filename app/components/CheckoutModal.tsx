@@ -19,12 +19,12 @@ import {
   MessageSquare,
   Sparkles,
   ShieldCheck,
+  Bus,
 } from "lucide-react";
 import { useCartStore } from "@/app/store/useCartStore";
 import { submitOrder, submitUtr, type SubmitOrderResult } from "@/app/actions/orders";
 import { recordCheckoutEventAction } from "@/app/actions/emails";
-import DepotSelect from "./DepotSelect";
-import type { RtcDepot } from "@/app/lib/rtcDepots";
+import { calculateShippingFee, calculatePackingFee, getShippingZone } from "@/app/lib/shipping";
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -33,12 +33,7 @@ interface CheckoutModalProps {
 
 type PaymentSession = Extract<SubmitOrderResult, { success: true }>;
 
-const INDIAN_STATES = [
-  "Andhra Pradesh", "Telangana", "Karnataka", "Tamil Nadu", "Kerala",
-  "Maharashtra", "Gujarat", "Goa", "Odisha", "Chhattisgarh",
-  "Madhya Pradesh", "Uttar Pradesh", "Delhi", "Haryana", "Punjab",
-  "Rajasthan", "West Bengal", "Bihar", "Jharkhand", "Assam", "Other",
-];
+
 
 function detectIsMobile() {
   if (typeof navigator === "undefined") return false;
@@ -52,13 +47,14 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
   const [formData, setFormData] = useState({
     customerName: "",
     phoneNumber: "",
-    state: "Andhra Pradesh",
+    state: "",
     city: "",
     pincode: "",
+    rtcDepotName: "",
     rtcLandmark: "",
     customerNotes: "",
   });
-  const [depot, setDepot] = useState<RtcDepot | null>(null);
+
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,6 +62,9 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
   const [utr, setUtr] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [copied, setCopied] = useState<"vpa" | "amount" | null>(null);
+  const [showLocationGuide, setShowLocationGuide] = useState(false);
+  const [hasSharedWhatsapp, setHasSharedWhatsapp] = useState(false);
+  const [hasPaid, setHasPaid] = useState(false);
 
   const [sessionId, setSessionId] = useState("");
   const sentEventTypes = useRef<Set<string>>(new Set());
@@ -89,8 +88,8 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
           state: formData.state,
           city: formData.city,
           pincode: formData.pincode,
-          rtcDepotCode: depot?.code || "",
-          rtcDepotName: depot?.name || "",
+          rtcDepotCode: "",
+          rtcDepotName: formData.rtcDepotName,
           rtcLandmark: formData.rtcLandmark,
           customerNotes: formData.customerNotes,
           cartItems: items.map((i) => ({
@@ -123,6 +122,19 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
     [items]
   );
 
+  const shippingFee = useMemo(() => {
+    if (!formData.state || !formData.city) return 0;
+    return calculateShippingFee(formData.state, formData.city, totalWeight);
+  }, [formData.state, formData.city, totalWeight]);
+
+  const packingFee = useMemo(() => {
+    return calculatePackingFee(totalWeight);
+  }, [totalWeight]);
+
+  const displayTotal = useMemo(() => {
+    return serverTotal + shippingFee + packingFee;
+  }, [serverTotal, shippingFee, packingFee]);
+
   useEffect(() => {
     if (isOpen) {
       setStep(1);
@@ -135,6 +147,9 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
       const newSessionId = "pm_sess_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now();
       setSessionId(newSessionId);
       sentEventTypes.current = new Set();
+      setShowLocationGuide(false);
+      setHasSharedWhatsapp(false);
+      setHasPaid(false);
     }
   }, [isOpen]);
 
@@ -148,10 +163,10 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
   const validateShipping = () => {
     if (!formData.customerName.trim()) return "Please enter your full name.";
     if (!/^[6-9]\d{9}$/.test(formData.phoneNumber)) return "Enter a valid 10-digit Indian mobile number.";
-    if (!formData.state.trim()) return "Please select your state.";
+    if (!formData.state.trim()) return "Please enter your state.";
     if (!formData.city.trim()) return "Please enter your city.";
     if (!/^\d{6}$/.test(formData.pincode)) return "Pincode must be exactly 6 digits.";
-    if (!depot) return "Please pick the RTC bus depot where you'll collect the carton.";
+    if (!formData.rtcDepotName.trim() || formData.rtcDepotName.trim().length < 2) return "Please enter the nearest RTC bus depot name.";
     if (formData.rtcLandmark.trim().length < 3) return "Please add a short landmark or contact note for the depot.";
     if (items.length === 0) return "Your cart is empty.";
     if (totalWeight < 10) return `Minimum order requirement is 10 kg. Your cart has only ${totalWeight} kg.`;
@@ -169,7 +184,6 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
     try {
       const payload = {
         ...formData,
-        rtcDepotCode: depot!.code,
         items: items.map((i) => ({
           variety: i.name as any,
           weightKg: i.weight,
@@ -191,8 +205,8 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
             state: formData.state,
             city: formData.city,
             pincode: formData.pincode,
-            rtcDepotCode: depot!.code,
-            rtcDepotName: depot!.name,
+            rtcDepotCode: "",
+            rtcDepotName: formData.rtcDepotName,
             rtcLandmark: formData.rtcLandmark,
             customerNotes: formData.customerNotes,
             cartItems: items.map((i) => ({
@@ -216,18 +230,13 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
 
   const handleSubmitUtr = async () => {
     if (!payment) return;
-    const trimmed = utr.replace(/\s+/g, "");
-    if (!/^\d{12}$/.test(trimmed)) {
-      setError("UTR must be exactly 12 digits — find it in your UPI app's transaction details.");
-      return;
-    }
     setError(null);
     setIsSubmitting(true);
     try {
       const res = await submitUtr({
         orderId: payment.orderId,
         phoneNumber: formData.phoneNumber,
-        utr: trimmed,
+        utr: "SCREENSHOT",
       });
       if (res.success) {
         clearCart();
@@ -243,8 +252,8 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
             state: formData.state,
             city: formData.city,
             pincode: formData.pincode,
-            rtcDepotCode: depot!.code,
-            rtcDepotName: depot!.name,
+            rtcDepotCode: "",
+            rtcDepotName: formData.rtcDepotName,
             rtcLandmark: formData.rtcLandmark,
             customerNotes: formData.customerNotes,
             cartItems: items.map((i) => ({
@@ -254,7 +263,7 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
               price: i.pricePerKg,
             })),
             eventType: "PAYMENT_SUBMITTED",
-            utr: trimmed,
+            utr: "SCREENSHOT",
             orderNumber: payment.orderNumber,
             orderId: payment.orderId,
           }).catch((err) => console.error("Error sending Payment Submitted:", err));
@@ -273,17 +282,18 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(key);
+      setHasPaid(true);
       setTimeout(() => setCopied(null), 1500);
     } catch { /* ignore */ }
   };
 
-  const totalForDisplay = payment ? payment.totalAmount : serverTotal;
+  const totalForDisplay = payment ? payment.totalAmount : displayTotal;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={isSubmitting ? undefined : handleClose} />
 
-      <div className="relative bg-brand-cream w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl md:rounded-3xl shadow-2xl overflow-hidden border-0 md:border md:border-white/20 animate-in zoom-in duration-300 flex flex-col md:flex-row">
+      <div className="relative bg-brand-cream w-full h-[100dvh] md:h-[680px] md:max-h-[90vh] md:max-w-4xl md:rounded-3xl shadow-2xl overflow-hidden border-0 md:border md:border-white/20 animate-in zoom-in duration-300 flex flex-col md:flex-row">
         <button
           onClick={handleClose}
           disabled={isSubmitting}
@@ -371,119 +381,196 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
             {step === 1 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                 <div>
-                  <h3 className="text-2xl font-bold text-brand-primary-green">Shipping Details</h3>
-                  <p className="text-xs text-brand-primary-green/60 mt-1">
+                  <h3 className="text-2xl font-bold text-brand-primary-green font-[family-name:var(--font-playfair)]">Shipping Details</h3>
+                  <p className="text-sm text-brand-primary-green/80 mt-1.5 leading-relaxed">
                     We deliver to the RTC Cargo / bus stand nearest you — drop us the exact landmark.
                   </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Full Name *" className="md:col-span-2">
-                    <div className="inp-container">
-                      <User className="inp-icon" />
-                      <input
-                        type="text"
-                        name="customerName"
-                        value={formData.customerName}
-                        onChange={handleChange}
-                        onBlur={triggerWarmLead}
-                        placeholder="Your complete name"
-                        className="inp inp-with-icon"
-                      />
+
+                {/* Personal Info Card */}
+                <div className="form-card">
+                  <div className="form-card-header text-brand-primary-green/90">
+                    <User className="w-4 h-4" />
+                    <span>Personal Info</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 md:p-5">
+                    <Field label="Full Name *" className="md:col-span-2">
+                      <div className="inp-container">
+                        <User className="inp-icon" />
+                        <input
+                          type="text"
+                          name="customerName"
+                          value={formData.customerName}
+                          onChange={handleChange}
+                          onBlur={triggerWarmLead}
+                          placeholder="Your complete name"
+                          className="inp inp-with-icon"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Phone Number *">
+                      <div className="inp-container">
+                        <Smartphone className="inp-icon" />
+                        <input
+                          type="tel"
+                          name="phoneNumber"
+                          value={formData.phoneNumber}
+                          onChange={handleChange}
+                          onBlur={triggerWarmLead}
+                          placeholder="10-digit mobile"
+                          maxLength={10}
+                          inputMode="numeric"
+                          className="inp inp-with-icon"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Pincode *">
+                      <div className="inp-container">
+                        <MapPin className="inp-icon" />
+                        <input
+                          type="text"
+                          name="pincode"
+                          value={formData.pincode}
+                          onChange={handleChange}
+                          placeholder="6 digit code"
+                          maxLength={6}
+                          inputMode="numeric"
+                          className="inp inp-with-icon"
+                        />
+                      </div>
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Address Card */}
+                <div className="form-card">
+                  <div className="form-card-header">
+                    <MapPin className="w-4 h-4" />
+                    <span>Delivery Address</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 md:p-5">
+                    <Field label="City / Town *">
+                      <div className="inp-container">
+                        <Building2 className="inp-icon" />
+                        <input
+                          type="text"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleChange}
+                          placeholder="e.g. Vijayawada"
+                          className="inp inp-with-icon"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="State *">
+                      <div className="inp-container">
+                        <Globe className="inp-icon" />
+                        <input
+                          type="text"
+                          name="state"
+                          value={formData.state}
+                          onChange={handleChange}
+                          placeholder="e.g. Andhra Pradesh"
+                          className="inp inp-with-icon"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Nearest RTC Bus Depot *" className="md:col-span-2">
+                      <div className="flex flex-col gap-2">
+                        <div className="inp-container">
+                          <Bus className="inp-icon" />
+                          <input
+                            type="text"
+                            name="rtcDepotName"
+                            value={formData.rtcDepotName}
+                            onChange={handleChange}
+                            placeholder="e.g. MGBS Hyderabad, Vijayawada PNBS"
+                            className="inp inp-with-icon"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pl-1">
+                          <p className="text-[11px] text-brand-primary-green/75 leading-relaxed">
+                            Your carton will be dispatched to this depot for pickup via RTC Cargo.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowLocationGuide(true)}
+                            className="text-xs font-bold text-brand-orange hover:text-brand-orange/80 flex items-center gap-1 shrink-0 bg-brand-orange/10 px-2 py-1 rounded transition-colors"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
+                            Guide: View Locations
+                          </button>
+                        </div>
+                      </div>
+                    </Field>
+                    <Field label="Pickup Landmark / Contact Note *" className="md:col-span-2">
+                      <div className="inp-container">
+                        <MapPin className="inp-icon text-brand-orange" />
+                        <input
+                          type="text"
+                          name="rtcLandmark"
+                          value={formData.rtcLandmark}
+                          onChange={handleChange}
+                          placeholder="e.g. Cargo counter near Platform 6, will collect by 7pm"
+                          className="inp inp-with-icon"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Order Notes (optional)" className="md:col-span-2">
+                      <div className="inp-container">
+                        <MessageSquare className="textarea-icon" />
+                        <textarea
+                          name="customerNotes"
+                          value={formData.customerNotes}
+                          onChange={handleChange}
+                          placeholder="Gift pack? Call before dispatch? Tell us here…"
+                          rows={2}
+                          className="inp inp-with-icon pt-3"
+                        />
+                      </div>
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Cost Breakdown Card */}
+                <div className="form-card overflow-hidden">
+                  <div className="form-card-header text-brand-primary-green/90">
+                    <CreditCard className="w-4 h-4" />
+                    <span>Price Breakdown</span>
+                  </div>
+                  <div className="p-4 md:p-5 space-y-3 text-sm text-brand-primary-green">
+                    <div className="flex justify-between items-center">
+                      <span className="text-brand-primary-green/70">Subtotal ({totalWeight} kg mangoes)</span>
+                      <span className="font-semibold tabular-nums">₹{serverTotal.toLocaleString("en-IN")}</span>
                     </div>
-                  </Field>
-                  <Field label="Phone Number *">
-                    <div className="inp-container">
-                      <Smartphone className="inp-icon" />
-                      <input
-                        type="tel"
-                        name="phoneNumber"
-                        value={formData.phoneNumber}
-                        onChange={handleChange}
-                        onBlur={triggerWarmLead}
-                        placeholder="10-digit mobile (e.g. 9876543210)"
-                        maxLength={10}
-                        inputMode="numeric"
-                        className="inp inp-with-icon"
-                      />
+                    <div className="flex justify-between items-center">
+                      <span className="text-brand-primary-green/70">Packing Fee</span>
+                      <span className="font-semibold tabular-nums">₹{packingFee}</span>
                     </div>
-                  </Field>
-                  <Field label="Pincode *">
-                    <div className="inp-container">
-                      <MapPin className="inp-icon" />
-                      <input
-                        type="text"
-                        name="pincode"
-                        value={formData.pincode}
-                        onChange={handleChange}
-                        placeholder="6 digit code"
-                        maxLength={6}
-                        inputMode="numeric"
-                        className="inp inp-with-icon"
-                      />
+                    <div className="flex justify-between items-center">
+                      <span className="text-brand-primary-green/70 flex items-center">
+                        <span>RTC Cargo Shipping</span>
+                        {formData.state && formData.city ? (
+                          <span className="text-[9px] bg-brand-primary-green/10 text-brand-primary-green px-1.5 py-0.5 rounded ml-2 uppercase font-bold tracking-wider">
+                            {getShippingZone(formData.state, formData.city)} Zone
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-brand-orange ml-2 animate-pulse">
+                            (Enter state & city to calculate)
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-bold tabular-nums">
+                        {formData.state && formData.city ? `₹${shippingFee}` : "—"}
+                      </span>
                     </div>
-                  </Field>
-                  <Field label="City / Town *">
-                    <div className="inp-container">
-                      <Building2 className="inp-icon" />
-                      <input
-                        type="text"
-                        name="city"
-                        value={formData.city}
-                        onChange={handleChange}
-                        placeholder="e.g. Vijayawada"
-                        className="inp inp-with-icon"
-                      />
+                    <div className="pt-3 border-t border-brand-primary-green/10 flex justify-between items-center">
+                      <span className="font-bold uppercase tracking-wider text-xs">Total Amount</span>
+                      <span className="text-xl font-[family-name:var(--font-playfair)] font-bold text-brand-primary-green tabular-nums">
+                        ₹{displayTotal.toLocaleString("en-IN")}
+                      </span>
                     </div>
-                  </Field>
-                  <Field label="State *">
-                    <div className="inp-container">
-                      <Globe className="inp-icon" />
-                      <select name="state" value={formData.state} onChange={handleChange} className="inp inp-with-icon">
-                        {INDIAN_STATES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </Field>
-                  <Field label="Nearest RTC Bus Depot *" className="md:col-span-2">
-                    <DepotSelect
-                      value={depot?.code ?? null}
-                      onChange={(_code, picked) => setDepot(picked)}
-                      preferredState={formData.state}
-                    />
-                    {depot && depot.code !== "other" && (
-                      <p className="mt-1.5 text-[11px] text-brand-primary-green/60">
-                        Carton dispatched to <b>{depot.name}</b>{depot.landmark ? ` (${depot.landmark})` : ""}. You'll
-                        collect it from this counter.
-                      </p>
-                    )}
-                  </Field>
-                  <Field label="Pickup Landmark / Contact Note *" className="md:col-span-2">
-                    <div className="inp-container">
-                      <MapPin className="inp-icon text-brand-orange" />
-                      <input
-                        type="text"
-                        name="rtcLandmark"
-                        value={formData.rtcLandmark}
-                        onChange={handleChange}
-                        placeholder="e.g. Cargo counter near Platform 6, will collect by 7pm"
-                        className="inp inp-with-icon"
-                      />
-                    </div>
-                  </Field>
-                  <Field label="Order Notes (optional)" className="md:col-span-2">
-                    <div className="inp-container">
-                      <MessageSquare className="textarea-icon" />
-                      <textarea
-                        name="customerNotes"
-                        value={formData.customerNotes}
-                        onChange={handleChange}
-                        placeholder="Gift pack? Call before dispatch? Tell us here…"
-                        rows={2}
-                        className="inp inp-with-icon pt-3"
-                      />
-                    </div>
-                  </Field>
+                  </div>
                 </div>
               </div>
             )}
@@ -531,6 +618,7 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
                       <a
                         href={isMobile ? payment.upiLink : undefined}
                         onClick={(e) => {
+                          setHasPaid(true);
                           if (!isMobile) {
                             e.preventDefault();
                             setError("UPI deep links can only be opened on mobile devices. Please scan the QR code or copy the UPI ID on the right to complete the payment.");
@@ -587,45 +675,105 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-brand-orange/30 bg-brand-orange/5 p-6 space-y-4 shadow-sm animate-in fade-in duration-500">
+                <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-6 space-y-4 shadow-sm animate-in fade-in duration-500">
                   <div className="flex items-start space-x-3 text-brand-primary-green">
-                    <div className="p-1.5 bg-brand-orange/10 rounded-lg text-brand-orange shrink-0 mt-0.5">
-                      <Sparkles className="w-4 h-4" />
+                    <div className="p-2 bg-green-500/10 rounded-xl text-green-600 shrink-0 mt-0.5">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-5 h-5"
+                      >
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.725 1.45 5.513 0 10.002-4.487 10.005-10 0-2.672-1.04-5.184-2.93-7.075C16.558 1.638 14.048.599 11.378.6c-5.517 0-10.007 4.49-10.01 10.004-.002 1.777.477 3.512 1.388 5.047L1.73 21.053l5.584-1.464c1.558.847 3.125 1.285 4.7 1.285zm11.365-7.39c-.29-.145-1.72-.85-1.985-.945-.266-.096-.46-.145-.653.145-.19.29-.74.945-.907 1.137-.166.19-.333.21-.624.066-1.558-.78-2.682-1.35-3.754-3.195-.285-.487.285-.45.815-.99.077-.078.155-.17.228-.24.07-.073.093-.12.143-.2.05-.083.025-.157-.012-.23-.037-.073-.33-1.025-.46-1.343-.13-.314-.27-.272-.37-.272-.095-.002-.206-.003-.317-.003-.11 0-.29.04-.44.206-.152.164-.58.567-.58 1.385 0 .817.595 1.606.678 1.718.083.11 1.17 1.787 2.835 2.505.396.17.705.27.947.346.4.127.762.11 1.05.067.32-.047 1.025-.42 1.17-.826.144-.404.144-.75.102-.825-.04-.075-.15-.12-.44-.265z" />
+                      </svg>
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm">After paying — enter the 12-digit UTR</h4>
-                      <p className="text-xs text-brand-primary-green/70 mt-1 leading-relaxed">
-                        Open the payment details in your UPI app and copy the <b>UPI Reference No.</b> (also
-                        called Transaction ID or UTR). It is always exactly 12 digits.
+                      <h4 className="font-bold text-sm text-green-800">After paying — Share Screenshot on WhatsApp</h4>
+                      <p className="text-xs text-brand-primary-green/80 mt-1 leading-relaxed">
+                        Please take a screenshot of your successful payment and share it with us on WhatsApp at <b className="text-brand-primary-green">+91 86397 50678</b>. This helps us verify your payment instantly and initiate packing!
                       </p>
                     </div>
                   </div>
-                  <div className="relative">
+
+                  {/* Transferred checkbox */}
+                  <div className="flex items-center space-x-3 bg-white p-3.5 rounded-xl border border-brand-primary-green/10">
                     <input
-                      type="text"
-                      value={utr}
-                      onChange={(e) => setUtr(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                      placeholder="e.g. 412345678901"
-                      maxLength={12}
-                      inputMode="numeric"
-                      className="inp utr-input font-mono text-center tracking-[0.25em]"
+                      type="checkbox"
+                      id="checkbox-has-paid"
+                      checked={hasPaid}
+                      onChange={(e) => setHasPaid(e.target.checked)}
+                      className="w-4.5 h-4.5 text-brand-primary-green border-brand-primary-green/20 rounded focus:ring-brand-primary-green cursor-pointer"
                     />
+                    <label htmlFor="checkbox-has-paid" className="text-xs font-bold text-brand-primary-green select-none cursor-pointer">
+                      I have completed the transfer of ₹{payment.totalAmount.toLocaleString("en-IN")} via UPI
+                    </label>
                   </div>
-                  <p className="text-[10px] text-brand-primary-green/50 text-center">
-                    Submitting this marks your order as <b>PENDING VERIFICATION</b>. The farm verifies in their bank app
-                    and then dispatches.
-                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <a
+                      href={hasPaid ? `https://wa.me/918639750678?text=${encodeURIComponent(
+                        `Hi, I have completed the payment of ₹${payment.totalAmount.toLocaleString("en-IN")} for my Palle Mamidi order ${payment.orderNumber}. Here is my payment screenshot:`
+                      )}` : undefined}
+                      target={hasPaid ? "_blank" : undefined}
+                      rel={hasPaid ? "noopener noreferrer" : undefined}
+                      onClick={() => {
+                        if (hasPaid) setHasSharedWhatsapp(true);
+                      }}
+                      className={`flex-grow py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 transition-all shadow-md ${
+                        hasPaid
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer hover:shadow-lg"
+                          : "bg-emerald-600/30 text-emerald-800/40 cursor-not-allowed pointer-events-none shadow-none"
+                      }`}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.725 1.45 5.513 0 10.002-4.487 10.005-10 0-2.672-1.04-5.184-2.93-7.075C16.558 1.638 14.048.599 11.378.6c-5.517 0-10.007 4.49-10.01 10.004-.002 1.777.477 3.512 1.388 5.047L1.73 21.053l5.584-1.464c1.558.847 3.125 1.285 4.7 1.285zm11.365-7.39c-.29-.145-1.72-.85-1.985-.945-.266-.096-.46-.145-.653.145-.19.29-.74.945-.907 1.137-.166.19-.333.21-.624.066-1.558-.78-2.682-1.35-3.754-3.195-.285-.487.285-.45.815-.99.077-.078.155-.17.228-.24.07-.073.093-.12.143-.2.05-.083.025-.157-.012-.23-.037-.073-.33-1.025-.46-1.343-.13-.314-.27-.272-.37-.272-.095-.002-.206-.003-.317-.003-.11 0-.29.04-.44.206-.152.164-.58.567-.58 1.385 0 .817.595 1.606.678 1.718.083.11 1.17 1.787 2.835 2.505.396.17.705.27.947.346.4.127.762.11 1.05.067.32-.047 1.025-.42 1.17-.826.144-.404.144-.75.102-.825-.04-.075-.15-.12-.44-.265z" />
+                      </svg>
+                      <span>Share on WhatsApp</span>
+                    </a>
+                  </div>
+
+                  {hasSharedWhatsapp ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 rounded-xl p-3 flex items-center gap-2 text-xs font-semibold animate-in fade-in duration-300">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0 animate-pulse" />
+                      <span>WhatsApp opened! You can now click "Confirm Payment" below to complete your order.</span>
+                    </div>
+                  ) : hasPaid ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 rounded-xl p-3 flex items-center gap-2 text-xs font-semibold animate-in fade-in duration-300">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0 animate-pulse" />
+                      <span>Payment completed! Now click "Share on WhatsApp" to open the chat and share the payment screenshot.</span>
+                    </div>
+                  ) : (
+                    <div className="bg-brand-orange/10 border border-brand-orange/20 text-brand-orange rounded-xl p-3 flex items-center gap-2 text-xs font-semibold animate-in fade-in duration-300">
+                      <span className="w-2 h-2 bg-brand-orange rounded-full shrink-0 animate-pulse" />
+                      <span>First, complete the payment above (tap checkbox or pay button) to enable screenshot sharing.</span>
+                    </div>
+                  )}
                 </div>
 
                 <details className="text-xs text-brand-primary-green/70">
-                  <summary className="cursor-pointer font-semibold">Order summary</summary>
-                  <div className="mt-2 space-y-1">
+                  <summary className="cursor-pointer font-semibold hover:text-brand-primary-green transition-colors">Order summary & breakdown</summary>
+                  <div className="mt-3 space-y-2 border-t border-brand-primary-green/10 pt-2 font-medium">
                     {items.map((item) => (
-                      <div key={`${item.id}-${item.weight}`} className="flex justify-between">
+                      <div key={`${item.id}-${item.weight}`} className="flex justify-between text-brand-primary-green/80">
                         <span>{item.name} ({item.weight}kg × {item.quantity})</span>
-                        <span className="font-semibold">₹{item.totalPrice.toLocaleString("en-IN")}</span>
+                        <span className="font-semibold tabular-nums">₹{item.totalPrice.toLocaleString("en-IN")}</span>
                       </div>
                     ))}
+                    <div className="flex justify-between text-brand-primary-green/60 text-[11px] pt-1">
+                      <span>Packing Fee</span>
+                      <span className="tabular-nums font-semibold">₹{packingFee}</span>
+                    </div>
+                    <div className="flex justify-between text-brand-primary-green/60 text-[11px]">
+                      <span>RTC Cargo Shipping ({getShippingZone(formData.state, formData.city)} Zone)</span>
+                      <span className="tabular-nums font-semibold">₹{shippingFee}</span>
+                    </div>
+                    <div className="flex justify-between text-brand-primary-green font-bold border-t border-brand-primary-green/5 pt-1 text-sm">
+                      <span>Total Amount</span>
+                      <span className="tabular-nums">₹{payment.totalAmount.toLocaleString("en-IN")}</span>
+                    </div>
                   </div>
                 </details>
               </div>
@@ -637,9 +785,9 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
                   <CheckCircle2 className="w-12 h-12" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-brand-primary-green">Payment Recorded!</h3>
-                  <p className="text-brand-primary-green/60 mt-2">
-                    UTR submitted. The farm will verify the deposit in their bank app and dispatch within 24–48 hours.
+                  <h3 className="text-2xl font-bold text-brand-primary-green">Order Placed Successfully!</h3>
+                  <p className="text-brand-primary-green/60 mt-2 font-medium">
+                    Your order is pending verification. Please make sure to share your payment screenshot on WhatsApp. Our team will talk to you shortly to verify your payment and share tracking details once dispatched (usually within a week).
                   </p>
                 </div>
                 <div className="bg-white/50 border border-dashed border-[#1B330F]/20 rounded-2xl p-6 w-full max-w-sm space-y-2">
@@ -670,10 +818,10 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
               {step === 2 && (
                 <button
                   onClick={handleSubmitUtr}
-                  disabled={isSubmitting || utr.length !== 12}
+                  disabled={isSubmitting || !hasSharedWhatsapp}
                   className="btn-primary"
                 >
-                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (<><span>Submit UTR</span><ArrowRight className="w-5 h-5" /></>)}
+                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (<><span>Confirm Payment</span><ArrowRight className="w-5 h-5" /></>)}
                 </button>
               )}
               {step === 3 && (
@@ -685,53 +833,191 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
           </div>
         </div>
 
+        {/* Location Guide Modal Popup */}
+        {showLocationGuide && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowLocationGuide(false)} />
+            <div className="relative bg-brand-cream w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-brand-primary-green/10 animate-in zoom-in-95 duration-200 flex flex-col my-auto max-h-[85vh]">
+              {/* Header */}
+              <div className="bg-brand-primary-green p-4 text-brand-cream flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Bus className="w-5 h-5 text-brand-orange" />
+                  <h4 className="font-[family-name:var(--font-playfair)] text-xl font-bold">Deliverable Locations Guide</h4>
+                </div>
+                <button
+                  onClick={() => setShowLocationGuide(false)}
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors cursor-pointer text-brand-cream"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-h-0 p-5 md:p-6 overflow-y-auto space-y-6 custom-scrollbar">
+                <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-xl p-4 text-xs text-brand-primary-green space-y-2">
+                  <p className="font-bold flex items-center gap-1 text-brand-orange">
+                    <Sparkles className="w-4 h-4 text-brand-orange animate-pulse" />
+                    Important Delivery Information:
+                  </p>
+                  <p className="leading-relaxed">
+                    All orders are delivered via <strong>RTC Cargo / Private Travels</strong>. Delivery available across Telangana, Andhra Pradesh, Chennai & Bangalore within <strong>2-3 days</strong>.
+                  </p>
+                  <p className="leading-relaxed text-brand-primary-green/70">
+                    Locations listed below are subject to change due to RTC rules, cargo availability, weather, or other reasons. Click on any location to auto-fill the form!
+                  </p>
+                </div>
+
+                {/* Grid of Locations */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[
+                    {
+                      title: "Hyderabad",
+                      points: [
+                        "MGBS", "Kachiguda", "Mehdipatnam", "SR Nagar", "Bala Nagar",
+                        "JBS", "Tarnaka", "KPHB", "Miyapur", "BHEL", "Patan Cheevu"
+                      ]
+                    },
+                    {
+                      title: "Chennai",
+                      points: [
+                        "Madhavaram", "Padi", "RMK College", "Gummidipoondi", "Koyambedu"
+                      ]
+                    },
+                    {
+                      title: "Bangalore",
+                      points: [
+                        "KR Puram", "Twin Factory", "Hoskote", "Mahadevapura", "Marathahalli",
+                        "Nelamangala", "Silk Board", "HSR Layout", "Electronic City",
+                        "Chandapura", "Attibele", "Meletic"
+                      ]
+                    },
+                    {
+                      title: "Andhra Pradesh",
+                      points: [
+                        "Nellore", "Markapuram", "Kavali", "Addanki", "Ongole",
+                        "Visakhapatnam", "Tirupati", "Vizianagaram", "Guntur", "Tenali",
+                        "Vijayawada", "Anakapalli", "Vinukonda"
+                      ]
+                    }
+                  ].map((loc) => (
+                    <div key={loc.title} className="bg-white rounded-xl border border-brand-primary-green/10 overflow-hidden shadow-sm hover:border-brand-primary-green/20 transition-colors">
+                      <div className="bg-brand-primary-green/5 px-4 py-2 border-b border-brand-primary-green/5 flex items-center justify-between">
+                        <span className="font-bold text-xs uppercase tracking-wider text-brand-primary-green">{loc.title}</span>
+                        <span className="text-[10px] text-brand-primary-green/50 font-semibold bg-brand-primary-green/10 px-2 py-0.5 rounded-full">{loc.points.length} Points</span>
+                      </div>
+                      <div className="p-3 grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs text-brand-primary-green/80">
+                        {loc.points.map((pt) => (
+                          <button
+                            key={pt}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                rtcDepotName: pt,
+                                state: loc.title === "Andhra Pradesh" ? "Andhra Pradesh" :
+                                       loc.title === "Hyderabad" ? "Telangana" :
+                                       loc.title === "Chennai" ? "Tamil Nadu" :
+                                       loc.title === "Bangalore" ? "Karnataka" : prev.state
+                              }));
+                              setShowLocationGuide(false);
+                            }}
+                            className="flex items-center gap-1.5 py-1 px-1.5 hover:bg-brand-cream/50 rounded text-left transition-colors group cursor-pointer"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-brand-orange shrink-0 group-hover:scale-110 transition-transform" />
+                            <span className="truncate group-hover:text-brand-orange transition-colors font-medium">{pt}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <style jsx>{`
+        :global(.form-card) {
+          background: white;
+          border-radius: 1rem;
+          border: 1px solid rgba(27, 51, 15, 0.06);
+          box-shadow: 0 1px 3px rgba(27, 51, 15, 0.04), 0 4px 12px rgba(27, 51, 15, 0.02);
+          overflow: hidden;
+          transition: box-shadow 0.3s ease;
+        }
+        :global(.form-card:focus-within) {
+          box-shadow: 0 2px 8px rgba(27, 51, 15, 0.08), 0 8px 24px rgba(27, 51, 15, 0.04);
+        }
+        :global(.form-card-header) {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.25rem;
+          font-size: 0.7rem;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(46, 77, 37, 0.85);
+          background: rgba(46, 77, 37, 0.03);
+          border-bottom: 1px solid rgba(27, 51, 15, 0.05);
+        }
         :global(.inp) {
           width: 100%;
           background: white;
-          border: 1px solid rgba(27, 51, 15, 0.1);
+          border: 1.5px solid rgba(27, 51, 15, 0.18);
           border-radius: 0.75rem;
-          padding: 1rem;
+          padding: 0.875rem 1rem;
           font-size: 0.875rem;
+          color: #1B330F;
+          caret-color: #1B330F !important;
+          cursor: text;
           outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        :global(.inp::placeholder) {
+          color: rgba(27, 51, 15, 0.45);
+        }
+        :global(.inp:hover) {
+          border-color: rgba(46, 77, 37, 0.35);
+          background: rgba(253, 246, 227, 0.2);
         }
         :global(.inp:focus) {
-          border-color: rgba(46, 77, 37, 0.4);
-          box-shadow: 0 0 0 4px rgba(46, 77, 37, 0.1);
+          border-color: rgba(46, 77, 37, 0.7);
+          background: white;
+          box-shadow: 0 0 0 3px rgba(46, 77, 37, 0.08), 0 2px 8px rgba(46, 77, 37, 0.06);
         }
         :global(.inp-container) {
           position: relative;
         }
         :global(.inp-icon) {
           position: absolute;
-          left: 1rem;
+          left: 0.875rem;
           top: 50%;
           transform: translateY(-50%);
-          color: rgba(46, 77, 37, 0.4);
+          color: rgba(46, 77, 37, 0.55);
           width: 1.125rem;
           height: 1.125rem;
           pointer-events: none;
-          transition: color 0.2s;
+          transition: color 0.25s ease;
         }
         :global(.inp-container:focus-within .inp-icon) {
           color: #2E4D25;
         }
         :global(.textarea-icon) {
           position: absolute;
-          left: 1rem;
+          left: 0.875rem;
           top: 1rem;
-          color: rgba(46, 77, 37, 0.4);
+          color: rgba(46, 77, 37, 0.55);
           width: 1.125rem;
           height: 1.125rem;
           pointer-events: none;
-          transition: color 0.2s;
+          transition: color 0.25s ease;
         }
         :global(.inp-container:focus-within .textarea-icon) {
           color: #2E4D25;
         }
         :global(.inp-with-icon) {
-          padding-left: 2.75rem !important;
+          padding-left: 2.625rem !important;
         }
         :global(.utr-input) {
           letter-spacing: 0.25em;
@@ -745,7 +1031,7 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
           box-shadow: 0 0 0 4px rgba(222, 138, 36, 0.15) !important;
         }
         :global(.btn-primary) {
-          background: #1b330f;
+          background: linear-gradient(135deg, #1b330f 0%, #2e4d25 100%);
           color: #fdf6e3;
           padding: 1rem 2rem;
           border-radius: 1rem;
@@ -755,15 +1041,17 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
           justify-content: center;
           gap: 0.75rem;
           cursor: pointer;
-          transition: all 0.2s ease-out;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 2px 8px rgba(27, 51, 15, 0.15);
         }
         :global(.btn-primary:hover:not(:disabled)) {
-          background: #2e4d25;
-          box-shadow: 0 10px 25px rgba(46, 77, 37, 0.2);
-          transform: translateY(-1px);
+          background: linear-gradient(135deg, #2e4d25 0%, #3a6130 100%);
+          box-shadow: 0 6px 20px rgba(46, 77, 37, 0.25);
+          transform: translateY(-2px);
         }
         :global(.btn-primary:active:not(:disabled)) {
           transform: translateY(0);
+          box-shadow: 0 2px 6px rgba(46, 77, 37, 0.2);
         }
         :global(.btn-primary:disabled) {
           opacity: 0.5;
@@ -790,7 +1078,7 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <label className="block text-xs font-bold text-brand-primary-green/60 uppercase mb-1.5">{label}</label>
+      <label className="block text-[10px] font-bold text-brand-primary-green/75 uppercase mb-1.5 tracking-wider">{label}</label>
       {children}
     </div>
   );

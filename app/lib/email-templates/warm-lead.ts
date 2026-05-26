@@ -5,6 +5,8 @@ interface WarmLeadTemplateInput {
   city?: string;
   cartSummary: { variety: string; weightKg: number; quantity: number }[];
   totalAmount: number;
+  shippingFee?: number;
+  packingFee?: number;
   scoreBadge: string;
   score: number;
   timestamp: string;
@@ -57,8 +59,23 @@ export function renderWarmLeadTemplate(data: WarmLeadTemplateInput): string {
       <h3 class="section-title">Cart Contents</h3>
       <div class="card" style="margin-bottom: 32px;">
         ${itemsHtml}
+        ${data.packingFee !== undefined || data.shippingFee !== undefined ? `
+          <div style="padding-top: 8px; font-size: 12px; color: #666666; text-align: right;">
+            Items Subtotal: <strong>₹${(data.totalAmount - (data.shippingFee || 0) - (data.packingFee || 0)).toLocaleString("en-IN")}</strong>
+          </div>
+          ${data.packingFee ? `
+            <div style="padding-top: 4px; font-size: 12px; color: #666666; text-align: right;">
+              Packing Fee: <strong>₹${data.packingFee.toLocaleString("en-IN")}</strong>
+            </div>
+          ` : ""}
+          ${data.shippingFee ? `
+            <div style="padding-top: 4px; font-size: 12px; color: #666666; text-align: right;">
+              RTC Cargo Shipping: <strong>₹${data.shippingFee.toLocaleString("en-IN")}</strong>
+            </div>
+          ` : ""}
+        ` : ""}
         <div style="padding-top: 12px; font-size: 16px; font-weight: 800; color: #1B330F; text-align: right;">
-          Total Cart Value: <span style="font-size: 20px; color: #DE8A24;">₹${data.totalAmount.toLocaleString("en-IN")}</span>
+          Total Amount: <span style="font-size: 20px; color: #DE8A24;">₹${data.totalAmount.toLocaleString("en-IN")}</span>
         </div>
       </div>
 

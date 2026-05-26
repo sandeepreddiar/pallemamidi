@@ -10,6 +10,7 @@ import { sendSmartMail } from "../lib/mail";
 import { renderWarmLeadTemplate } from "../lib/email-templates/warm-lead";
 import { renderHotLeadTemplate } from "../lib/email-templates/hot-lead";
 import { renderPaymentSubmittedTemplate } from "../lib/email-templates/payment-submitted";
+import { calculateShippingFee, calculatePackingFee } from "../lib/shipping";
 
 export interface CheckoutEventPayload {
   sessionId: string;
@@ -151,6 +152,34 @@ export async function recordCheckoutEventAction(payload: CheckoutEventPayload) {
       timeStyle: "short",
     }) + " (IST)";
 
+    const totalWeight = cartItems.reduce(
+      (sum, item) => sum + item.weightKg * item.quantity,
+      0
+    );
+
+    let shippingFee = 0;
+    let packingFee = 0;
+    let totalWithFees = totalCartVal;
+
+    if (eventType === "PAYMENT_SUBMITTED" && orderId) {
+      const order = await db.query.orders.findFirst({
+        where: eq(orders.id, orderId)
+      });
+      if (order) {
+        shippingFee = parseFloat(order.shippingFee);
+        packingFee = parseFloat(order.packingFee);
+        totalWithFees = parseFloat(order.totalAmount);
+      } else {
+        shippingFee = (state && city) ? calculateShippingFee(state, city, totalWeight) : 0;
+        packingFee = calculatePackingFee(totalWeight);
+        totalWithFees = totalCartVal + shippingFee + packingFee;
+      }
+    } else {
+      shippingFee = (state && city) ? calculateShippingFee(state, city, totalWeight) : 0;
+      packingFee = calculatePackingFee(totalWeight);
+      totalWithFees = totalCartVal + shippingFee + packingFee;
+    }
+
     if (eventType === "CHECKOUT_STARTED") {
       subject = `🟡 Warm Lead — ${customerName || "Customer"} left checkout`;
       badgeText = "WARM LEAD";
@@ -162,7 +191,9 @@ export async function recordCheckoutEventAction(payload: CheckoutEventPayload) {
         state,
         city,
         cartSummary: cartItems,
-        totalAmount: totalCartVal,
+        totalAmount: totalWithFees,
+        shippingFee,
+        packingFee,
         scoreBadge: badge,
         score,
         timestamp: nowFormatted,
@@ -182,7 +213,9 @@ export async function recordCheckoutEventAction(payload: CheckoutEventPayload) {
         rtcLandmark,
         customerNotes,
         cartSummary: cartItems,
-        totalAmount: totalCartVal,
+        totalAmount: totalWithFees,
+        shippingFee,
+        packingFee,
         scoreBadge: badge,
         score,
         timestamp: nowFormatted,
@@ -206,7 +239,9 @@ export async function recordCheckoutEventAction(payload: CheckoutEventPayload) {
         utr,
         submittedAt: nowFormatted,
         cartSummary: cartItems,
-        totalAmount: totalCartVal,
+        totalAmount: totalWithFees,
+        shippingFee,
+        packingFee,
         scoreBadge: badge,
         score,
         timestamp: nowFormatted,

@@ -1,7 +1,9 @@
 "use client";
 
+// Trivial touch to trigger hot reload compilation
+
 import { useState } from "react";
-import Image from "next/image";
+import OptimizedImage from "./OptimizedImage";
 import Link from "next/link";
 import { Plus, Minus, ShoppingBasket, Check } from "lucide-react";
 import { useCartStore } from "@/app/store/useCartStore";
@@ -19,6 +21,52 @@ interface MangoCardProps {
   };
 }
 
+// Helper functions for sequence generation: 1, 3, 5, 10, 13, 15, 20, 23, 25, 30...
+const getNextSequenceWeight = (current: number, allowed: number[]): number => {
+  const base = allowed.filter(x => x !== 1).sort((a, b) => a - b);
+  if (base.length === 0) return current + 1;
+  if (current < 1) return 1;
+  if (current === 1) return base[0];
+
+  let best = Infinity;
+  const startN = Math.max(0, Math.floor(current / 10) - 1);
+  for (let n = startN; n <= startN + 3; n++) {
+    for (const a of base) {
+      const val = 10 * n + a;
+      if (val > current && val < best) {
+        best = val;
+      }
+    }
+  }
+  return best === Infinity ? current + 1 : best;
+};
+
+const getPrevSequenceWeight = (current: number, allowed: number[]): number => {
+  const base = allowed.filter(x => x !== 1).sort((a, b) => a - b);
+  if (base.length === 0) return Math.max(1, current - 1);
+  if (current <= 1) return 1;
+  if (current <= base[0]) return 1;
+
+  let best = 1;
+  const startN = Math.max(0, Math.floor(current / 10) - 1);
+  for (let n = startN; n <= startN + 3; n++) {
+    for (const a of base) {
+      const val = 10 * n + a;
+      if (val < current && val > best) {
+        best = val;
+      }
+    }
+  }
+  return best;
+};
+
+const isValidSequenceWeight = (w: number, allowed: number[]): boolean => {
+  if (w <= 1 || !Number.isInteger(w)) return false;
+  const base = allowed.filter(x => x !== 1);
+  if (base.length === 0) return true;
+  return base.some(a => (w - a) >= 0 && (w - a) % 10 === 0);
+};
+
 export default function MangoCard({ mango }: MangoCardProps) {
   const defaultWeight = mango.allowedWeightsKg[0] || 5;
   const [weight, setWeight] = useState<number | string>(defaultWeight);
@@ -32,7 +80,7 @@ export default function MangoCard({ mango }: MangoCardProps) {
 
   const handleWeightChange = (val: number | string) => {
     if (typeof val === "number") {
-      if (mango.allowedWeightsKg.includes(val)) {
+      if (isValidSequenceWeight(val, mango.allowedWeightsKg)) {
         setWeight(val);
       }
     } else {
@@ -44,34 +92,20 @@ export default function MangoCard({ mango }: MangoCardProps) {
   };
 
   const handleIncrement = () => {
-    const sorted = [...mango.allowedWeightsKg].sort((a, b) => a - b);
-    const currentIndex = sorted.indexOf(numericWeight);
-    if (currentIndex !== -1 && currentIndex < sorted.length - 1) {
-      setWeight(sorted[currentIndex + 1]);
-    } else if (currentIndex === -1) {
-      const next = sorted.find(w => w > numericWeight);
-      if (next !== undefined) setWeight(next);
-    }
+    setWeight(getNextSequenceWeight(numericWeight, mango.allowedWeightsKg));
   };
 
   const handleDecrement = () => {
-    const sorted = [...mango.allowedWeightsKg].sort((a, b) => a - b);
-    const currentIndex = sorted.indexOf(numericWeight);
-    if (currentIndex > 0) {
-      setWeight(sorted[currentIndex - 1]);
-    } else if (currentIndex === -1) {
-      const prev = [...sorted].reverse().find(w => w < numericWeight);
-      if (prev !== undefined) setWeight(prev);
-    }
+    setWeight(getPrevSequenceWeight(numericWeight, mango.allowedWeightsKg));
   };
 
   const handleAddToCart = () => {
-    if (numericWeight <= 0 || (mango.status !== 'AVAILABLE' && mango.status !== 'PREBOOKING')) return;
+    if (numericWeight <= 1 || (mango.status !== 'AVAILABLE' && mango.status !== 'PREBOOKING')) return;
 
     // Safety fallback: ensure only valid box weight is passed to store
-    const finalWeight = mango.allowedWeightsKg.includes(numericWeight)
+    const finalWeight = isValidSequenceWeight(numericWeight, mango.allowedWeightsKg)
       ? numericWeight
-      : defaultWeight;
+      : (mango.allowedWeightsKg.find(x => x !== 1) || 5);
 
     addItem({
       id: mango.id,
@@ -94,12 +128,13 @@ export default function MangoCard({ mango }: MangoCardProps) {
       {/* Image Container */}
       <div className="relative w-full aspect-[4/3] mb-2 overflow-hidden rounded-xl bg-white/5 flex items-center justify-center p-2">
         <Link href={`/mangoes/${varietySlug(mango.name)}`} className="absolute inset-0 z-10" aria-label={`View ${mango.name} mango details`}>
-          <Image
+          <OptimizedImage
             src={mango.image}
-            alt={`${mango.name} mango — farm fresh from Palla Mamidi`}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-contain group-hover:scale-110 transition-transform duration-700 ease-out"
+            alt={`${mango.name} mango — farm fresh from Palle Mamidi`}
+            width={450}
+            quality={80}
+            className="absolute inset-0 w-full h-full"
+            imgClassName="object-contain group-hover:scale-110 transition-transform duration-700 ease-out"
           />
         </Link>
         <div className={`absolute top-2 right-2 backdrop-blur-md border text-white text-[8px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full pointer-events-none ${
@@ -188,12 +223,14 @@ export default function MangoCard({ mango }: MangoCardProps) {
 
       <button 
         onClick={handleAddToCart}
-        disabled={isAdded || (mango.status !== 'AVAILABLE' && mango.status !== 'PREBOOKING')}
+        disabled={isAdded || (mango.status !== 'AVAILABLE' && mango.status !== 'PREBOOKING') || numericWeight === 1}
         className={`w-full py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition-all duration-300 transform active:scale-95 cursor-pointer relative z-10 text-sm ${
           isAdded 
             ? "bg-green-500 text-white" 
             : (mango.status !== 'AVAILABLE' && mango.status !== 'PREBOOKING')
             ? "bg-white/10 text-brand-cream/40 cursor-not-allowed border border-white/5"
+            : numericWeight === 1
+            ? "bg-white/10 text-brand-cream/60 cursor-not-allowed border border-white/5"
             : "bg-brand-cream text-brand-primary-green hover:shadow-[0_10px_20px_rgba(242,232,207,0.3)]"
         }`}
       >
@@ -202,6 +239,8 @@ export default function MangoCard({ mango }: MangoCardProps) {
             <Check className="w-5 h-5" />
             <span>Added to Cart</span>
           </>
+        ) : numericWeight === 1 ? (
+          <span>Select Box Size</span>
         ) : mango.status === 'PREBOOKING' ? (
           <>
             <ShoppingBasket className="w-5 h-5" />

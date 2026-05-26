@@ -1,13 +1,17 @@
 import { ArrowRight } from "lucide-react";
+import OptimizedImage from "./OptimizedImage";
 
 export default function HeroSection() {
   return (
     <main className="relative w-full overflow-hidden bg-brand-cream">
       {/* Hero Image - Cropped on mobile to focus on the village orchard & woman, full aspect on desktop */}
-      <img 
+      <OptimizedImage 
         src="/hero-2.png" 
-        alt="Palla Mamidi Hero" 
-        className="w-full h-[240px] sm:h-[320px] md:h-auto object-cover md:object-contain object-[73%_center] block"
+        alt="Palle Mamidi Hero" 
+        width={1600}
+        quality={85}
+        className="w-full h-[240px] sm:h-[320px] md:h-auto block"
+        imgClassName="object-cover md:object-contain object-[73%_center]"
       />
 
       {/* Mobile Content Block (below the image) */}
@@ -25,7 +29,7 @@ export default function HeroSection() {
 
         {/* Heading */}
         <h2 className="font-[family-name:var(--font-playfair)] text-[#1B330F] text-3xl font-bold leading-tight tracking-tight">
-          From our orchards<br />
+          From our farms<br />
           to your home,<br />
           with love...
         </h2>
@@ -42,7 +46,7 @@ export default function HeroSection() {
         <div className="max-w-7xl mx-auto px-6 lg:px-12 w-full">
           <div className="max-w-xl">
             <h2 className="font-[family-name:var(--font-playfair)] text-[#1B330F] text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.05] mb-4 tracking-tight">
-              From our orchards<br />
+              From our farms<br />
               to your home,<br />
               with love...
             </h2>

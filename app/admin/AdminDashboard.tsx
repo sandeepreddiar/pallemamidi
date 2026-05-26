@@ -27,6 +27,8 @@ export type AdminOrder = {
   rtcLandmark: string;
   customerNotes: string | null;
   totalAmount: string | number;
+  shippingFee: string | number;
+  packingFee: string | number;
   status: string;
   paymentMethod: string;
   utr: string | null;

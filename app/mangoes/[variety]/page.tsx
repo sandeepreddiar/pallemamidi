@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Image from "next/image";
+import OptimizedImage from "../../components/OptimizedImage";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import TopBar from "../../components/TopBar";
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       `${entry.name} mango ${content.seasonMonths.split(" – ")[0].toLowerCase()}`,
       ...content.altNames.map((n) => `${n} mango`),
       "Andhra mangoes",
-      "Palla Mamidi",
+      "Palle Mamidi",
     ],
     openGraph: {
       type: "website",
@@ -145,13 +145,13 @@ export default async function VarietyPage({ params }: Props) {
 
         <article className="grid md:grid-cols-2 gap-10 items-start">
           <div className="relative aspect-square bg-white rounded-3xl overflow-hidden shadow-sm">
-            <Image
+            <OptimizedImage
               src={entry.image}
               alt={`${entry.name} mango — farm fresh from ${content.origin}`}
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 600px"
-              className="object-contain p-8"
+              width={600}
+              quality={85}
+              className="absolute inset-0 w-full h-full"
+              imgClassName="object-contain p-8"
             />
           </div>
 
@@ -172,7 +172,7 @@ export default async function VarietyPage({ params }: Props) {
             </dl>
 
             <p className="text-3xl font-bold text-brand-orange mb-2">₹{entry.pricePerKg}<span className="text-base font-medium text-brand-primary-green/60">/kg</span></p>
-            <p className="text-sm text-brand-primary-green/70 mb-6">Available in {entry.allowedWeightsKg.filter(w => w !== 1).join(", ")} kg boxes (as well as 1 kg trial weight). Minimum 10 kg total basket weight required for checkout.</p>
+            <p className="text-sm text-brand-primary-green/70 mb-6">Available in {entry.allowedWeightsKg.filter(w => w !== 1).join(", ")} kg boxes. Minimum 10 kg total basket weight required for checkout.</p>
 
             {entry.status === 'AVAILABLE' || entry.status === 'PREBOOKING' ? (
               <Link
